@@ -419,7 +419,7 @@
                     "Recipes"
                 ],
                 "summary": "Copie une recette dans celles de l'utilisateur connect\u00e9",
-                "description": "Chaque ingr\u00e9dient de la recette est rapproch\u00e9 de ceux que l'utilisateur poss\u00e8de d\u00e9j\u00e0 (ce qu'il a adopt\u00e9, puis le m\u00eame nom dans le m\u00eame rayon, avec une unit\u00e9 compatible) ; \u00e0 d\u00e9faut, il re\u00e7oit une copie de l'ingr\u00e9dient avec ses conversions propres. Un ingr\u00e9dient existant de l'utilisateur n'est jamais modifi\u00e9. La copie d'une recette ordinaire est une recette ordinaire ; celle que l'auteur fait de sa propre recette secr\u00e8te est secr\u00e8te aussi.",
+                "description": "Chaque ingr\u00e9dient de la recette est rapproch\u00e9 de ceux que l'utilisateur poss\u00e8de d\u00e9j\u00e0 (ce qu'il a adopt\u00e9, puis le m\u00eame nom dans le m\u00eame rayon, avec une unit\u00e9 compatible) ; \u00e0 d\u00e9faut, il re\u00e7oit une copie de l'ingr\u00e9dient avec ses conversions propres. Un ingr\u00e9dient existant de l'utilisateur n'est jamais modifi\u00e9. La copie d'une recette ordinaire est une recette ordinaire ; celle que l'auteur fait de sa propre recette secr\u00e8te est secr\u00e8te aussi. Une recette COMPOS\u00c9E (qui en utilise d'autres) copie aussi ses recettes utilis\u00e9es, cr\u00e9\u00e9es avant elle, avec un seul rapprochement d'ingr\u00e9dients ; la copie qu'un utilisateur a d\u00e9j\u00e0 d'une recette utilis\u00e9e (sans composants, ordinaire) sert \u00e0 la place d'une nouvelle ; l'auteur qui copie sa propre recette compos\u00e9e partage ses recettes utilis\u00e9es, rien n'est recopi\u00e9. La r\u00e9ponse est celle de la recette compos\u00e9e, `201` et `Location`, sans corps.",
                 "operationId": "post_api_copy_recipe",
                 "parameters": [
                     {
@@ -447,7 +447,7 @@
                         "description": "Recette inconnue, ou secr\u00e8te et d'un autre (que son auteur seul voit, un administrateur n'y \u00e9chappe pas) : rien n'est copi\u00e9"
                     },
                     "422": {
-                        "description": "L'utilisateur a d\u00e9j\u00e0 2 000 recettes, copies comprises (`RECIPE_LIMIT_REACHED`)"
+                        "description": "L'utilisateur a d\u00e9j\u00e0 2 000 recettes, copies comprises, ou les aurait avec les recettes utilis\u00e9es \u00e0 cr\u00e9er (`RECIPE_LIMIT_REACHED`, rien n'est \u00e9crit)"
                     }
                 }
             }
@@ -1103,6 +1103,45 @@
                     },
                     "422": {
                         "description": "Corps de la requ\u00eate invalide (dont une dimension sans facteur de base ou l'inverse, ou un facteur qui n'est pas strictement positif)"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-list-rows/{id}/decrease": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Retire 1 \u00e0 la quantit\u00e9 d'une ligne pr\u00e9cise d'une liste, dans l'unit\u00e9 d'achat de la ligne ; la ligne dispara\u00eet quand il n'en reste presque rien (0,4 lu \u00ab 1 \u00bb dispara\u00eet d'un retrait). C'est la liste qui porte la ligne qui change (\u00e0 la diff\u00e9rence de `\u2026/active/ingredients/{slug}/decrease`)",
+                "operationId": "post_api_decrease_shopping_list_row",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Quantit\u00e9 diminu\u00e9e"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    },
+                    "409": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             }
@@ -2169,6 +2208,45 @@
                     },
                     "502": {
                         "description": "`MARMITON_UNAVAILABLE` : Marmiton n'a pas r\u00e9pondu comme il faut (d\u00e9lai d\u00e9pass\u00e9, 5xx, refus du serveur, redirection hors de Marmiton) ; on ne distingue pas un blocage d'une panne. Rien n'est \u00e9crit"
+                    }
+                }
+            }
+        },
+        "/api/v1/shopping-list-rows/{id}/increase": {
+            "post": {
+                "tags": [
+                    "Shopping lists"
+                ],
+                "summary": "Ajoute 1 \u00e0 la quantit\u00e9 d'une ligne pr\u00e9cise d'une liste, dans l'unit\u00e9 d'achat de la ligne. C'est la liste qui porte la ligne qui change, jamais celle de la destination du produit (\u00e0 la diff\u00e9rence de `\u2026/active/ingredients/{slug}/increase`)",
+                "operationId": "post_api_increase_shopping_list_row",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/IfMatch"
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Quantit\u00e9 augment\u00e9e"
+                    },
+                    "403": {
+                        "description": "La ressource appartient \u00e0 un autre utilisateur"
+                    },
+                    "404": {
+                        "description": "Ressource inconnue"
+                    },
+                    "409": {
+                        "description": "La liste est envoy\u00e9e au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`)"
+                    },
+                    "412": {
+                        "description": "La version de la liste n'est plus celle de `If-Match` : elle a \u00e9t\u00e9 modifi\u00e9e depuis sa lecture"
                     }
                 }
             }
@@ -6695,11 +6773,11 @@
                         "nullable": true
                     },
                     "quantityByIngredientSlug": {
-                        "description": "Quantit\u00e9 de chaque ingr\u00e9dient de la liste, dans son unit\u00e9 d'achat, index\u00e9e par slug d'ingr\u00e9dient",
+                        "description": "Quantit\u00e9 de chaque ingr\u00e9dient de la liste, dans son unit\u00e9 d'achat et arrondie \u00e0 l'entier sup\u00e9rieur comme la ligne de la liste, index\u00e9e par slug d'ingr\u00e9dient",
                         "type": "object",
                         "example": {
                             "oeuf": 6,
-                            "farine": 0.5
+                            "farine": 1
                         },
                         "additionalProperties": {
                             "type": "number"
@@ -7417,7 +7495,7 @@
                         "example": "\u0153uf"
                     },
                     "quantity": {
-                        "description": "Quantit\u00e9 \u00e0 acheter, dans l'unit\u00e9 d'achat de l'ingr\u00e9dient",
+                        "description": "Quantit\u00e9 \u00e0 acheter, dans l'unit\u00e9 d'achat de l'ingr\u00e9dient, toujours arrondie \u00e0 l'entier sup\u00e9rieur (une unit\u00e9 d'achat ne se coupe pas : 0,4 plaquette se lit 1). La ligne garde sa quantit\u00e9 exacte en base",
                         "type": "number",
                         "format": "float",
                         "example": 6

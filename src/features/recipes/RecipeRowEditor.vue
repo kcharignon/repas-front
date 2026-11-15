@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { Plus, Trash2 } from 'lucide-vue-next'
 
 import DepartmentMarker from '@/design/DepartmentMarker.vue'
+import { isSameName, rankByName } from '@/design/nameSearch'
 import UiButton from '@/design/UiButton.vue'
 import UiCombobox from '@/design/UiCombobox.vue'
 import type { ComboboxOption } from '@/design/UiCombobox.vue'
@@ -50,17 +51,29 @@ const quantity = field('quantity')
 const unitSlug = field('unitSlug')
 // L'ingrédient choisi : son repère de rayon (et son rayon si son nom existe ailleurs) se lisent sous le champ, jamais dedans
 const chosen = computed(() => props.options.find((option) => option.value === ingredientSlug.value))
-// Ce qui est tapé ne correspond à aucun ingrédient : on propose de le créer ici (ING-017), sans quitter la recette. Même comparaison que
-// la liste (casse et accents ignorés, le texte tapé est contenu dans le nom).
+// La recherche est souple, comme celle du back (ADR 0019) : casse, accents et ligatures ignorés (« boeuf » trouve « Bœuf »), fautes de frappe
+// rattrapées (Jaro-Winkler), le plus proche d'abord. Quand le texte est le nom de l'ingrédient choisi (le champ le montre une fois choisi),
+// on n'y cherche rien : la liste entière reste à portée.
 const search = ref('')
-const fold = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('fr')
 const wanted = computed(() => search.value.trim())
-const noMatch = computed(
+const showsChosen = computed(
+  () => chosen.value !== undefined && isSameName(wanted.value, chosen.value.label),
+)
+const matches = computed(() =>
+  showsChosen.value ? props.options : rankByName(props.options, wanted.value),
+)
+// Aucun ingrédient ne porte exactement ce nom : on propose de le créer ici (ING-017), sans quitter la recette, et sans l'imposer : les
+// ingrédients qui ressemblent restent choisissables, « créer » n'est qu'une dernière ligne.
+const canOfferCreate = computed(
   () =>
     props.canCreate === true &&
     wanted.value !== '' &&
-    !props.options.some((option) => fold(option.label).includes(fold(wanted.value))),
+    !props.options.some((option) => isSameName(wanted.value, option.label)),
 )
+// Rien ne ressemble : la liste ne s'ouvre pas, le champ dit l'issue lui-même
+const noMatch = computed(() => canOfferCreate.value && matches.value.length === 0)
+// Des ingrédients ressemblent mais aucun ne s'appelle ainsi : « créer » est la dernière ligne de la liste
+const createBesideMatches = computed(() => canOfferCreate.value && matches.value.length > 0)
 const creating = ref(false)
 const created = ref(false)
 const fieldElement = ref<HTMLElement | null>(null)
@@ -110,7 +123,12 @@ watch(unitList, (list) => {
         v-model="ingredientSlug"
         v-model:search-term="search"
         :hide-empty="noMatch"
-        :options="options"
+        ignore-filter
+        :options="matches"
+        :create-label="
+          createBesideMatches ? t('editor.createIngredient', { name: wanted }) : undefined
+        "
+        @create="creating = true"
         :label="t('editor.ingredientN', { n: index + 1 })"
         :placeholder="t('editor.ingredientPlaceholder')"
         :empty="t('editor.noIngredient')"

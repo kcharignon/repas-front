@@ -197,7 +197,7 @@ export interface paths {
         put?: never;
         /**
          * Copie une recette dans celles de l'utilisateur connecté
-         * @description Chaque ingrédient de la recette est rapproché de ceux que l'utilisateur possède déjà (ce qu'il a adopté, puis le même nom dans le même rayon, avec une unité compatible) ; à défaut, il reçoit une copie de l'ingrédient avec ses conversions propres. Un ingrédient existant de l'utilisateur n'est jamais modifié. La copie d'une recette ordinaire est une recette ordinaire ; celle que l'auteur fait de sa propre recette secrète est secrète aussi.
+         * @description Chaque ingrédient de la recette est rapproché de ceux que l'utilisateur possède déjà (ce qu'il a adopté, puis le même nom dans le même rayon, avec une unité compatible) ; à défaut, il reçoit une copie de l'ingrédient avec ses conversions propres. Un ingrédient existant de l'utilisateur n'est jamais modifié. La copie d'une recette ordinaire est une recette ordinaire ; celle que l'auteur fait de sa propre recette secrète est secrète aussi. Une recette COMPOSÉE (qui en utilise d'autres) copie aussi ses recettes utilisées, créées avant elle, avec un seul rapprochement d'ingrédients ; la copie qu'un utilisateur a déjà d'une recette utilisée (sans composants, ordinaire) sert à la place d'une nouvelle ; l'auteur qui copie sa propre recette composée partage ses recettes utilisées, rien n'est recopié. La réponse est celle de la recette composée, `201` et `Location`, sans corps.
          */
         post: operations["post_api_copy_recipe"];
         delete?: never;
@@ -385,6 +385,23 @@ export interface paths {
         put?: never;
         /** Crée une unité (administrateur) */
         post: operations["post_api_create_unit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping-list-rows/{id}/decrease": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire 1 à la quantité d'une ligne précise d'une liste, dans l'unité d'achat de la ligne ; la ligne disparaît quand il n'en reste presque rien (0,4 lu « 1 » disparaît d'un retrait). C'est la liste qui porte la ligne qui change (à la différence de `…/active/ingredients/{slug}/decrease`) */
+        post: operations["post_api_decrease_shopping_list_row"];
         delete?: never;
         options?: never;
         head?: never;
@@ -656,6 +673,23 @@ export interface paths {
          * @description Seul l'identifiant de la recette est retenu du lien (`MarmitonUrl`) : la page lue est celle que l'application reconstruit, jamais l'adresse reçue. Si la recette n'a jamais été importée, sa page est lue une fois et une recette NEUTRE est créée pour tous (sans propriétaire, ordinaire, visible dans « Recettes des autres », qu'aucun compte ne modifie, administrateur compris) ; si elle existe déjà, Marmiton n'est pas appelé. L'utilisateur reçoit SA copie de la neutre, par le même rapprochement d'ingrédients que `POST /recipes/{id}/copy`, modifiable, avec le lien d'origine (`sourceUrl` de `GET /recipes/{id}`). Une ligne dont l'unité ne se convertit pas en l'unité d'achat n'empêche pas la copie : la fiche dit `convertible: false`. S'il a déjà une copie de cette recette, elle lui est rendue (`200`), rien n'est écrit.
          */
         post: operations["post_api_import_marmiton_recipe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/shopping-list-rows/{id}/increase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ajoute 1 à la quantité d'une ligne précise d'une liste, dans l'unité d'achat de la ligne. C'est la liste qui porte la ligne qui change, jamais celle de la destination du produit (à la différence de `…/active/ingredients/{slug}/increase`) */
+        post: operations["post_api_increase_shopping_list_row"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2671,10 +2705,10 @@ export interface components {
              */
             shoppingListId?: string | null;
             /**
-             * @description Quantité de chaque ingrédient de la liste, dans son unité d'achat, indexée par slug d'ingrédient
+             * @description Quantité de chaque ingrédient de la liste, dans son unité d'achat et arrondie à l'entier supérieur comme la ligne de la liste, indexée par slug d'ingrédient
              * @example {
              *       "oeuf": 6,
-             *       "farine": 0.5
+             *       "farine": 1
              *     }
              */
             quantityByIngredientSlug: {
@@ -3114,7 +3148,7 @@ export interface components {
             ingredientName: string;
             /**
              * Format: float
-             * @description Quantité à acheter, dans l'unité d'achat de l'ingrédient
+             * @description Quantité à acheter, dans l'unité d'achat de l'ingrédient, toujours arrondie à l'entier supérieur (une unité d'achat ne se coupe pas : 0,4 plaquette se lit 1). La ligne garde sa quantité exacte en base
              * @example 6
              */
             quantity: number;
@@ -4548,7 +4582,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description L'utilisateur a déjà 2 000 recettes, copies comprises (`RECIPE_LIMIT_REACHED`) */
+            /** @description L'utilisateur a déjà 2 000 recettes, copies comprises, ou les aurait avec les recettes utilisées à créer (`RECIPE_LIMIT_REACHED`, rien n'est écrit) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5174,6 +5208,57 @@ export interface operations {
             };
             /** @description Corps de la requête invalide (dont une dimension sans facteur de base ou l'inverse, ou un facteur qui n'est pas strictement positif) */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_decrease_shopping_list_row: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quantité diminuée */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La ressource appartient à un autre utilisateur */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ressource inconnue */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6270,6 +6355,57 @@ export interface operations {
             };
             /** @description `MARMITON_UNAVAILABLE` : Marmiton n'a pas répondu comme il faut (délai dépassé, 5xx, refus du serveur, redirection hors de Marmiton) ; on ne distingue pas un blocage d'une panne. Rien n'est écrit */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    post_api_increase_shopping_list_row: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Version (ETag) de la ressource lue par le client, entre guillemets. Absent : pas de contrôle (la dernière écriture gagne). Une autre version répond 412 (la ressource a été modifiée depuis la lecture) ; une modification simultanée détectée à l'enregistrement répond 409. ADR 0016. */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quantité augmentée */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La ressource appartient à un autre utilisateur */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ressource inconnue */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La liste est envoyée au drive : elle n'est plus modifiable (message `SHOPPING_LIST_SENT`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La version de la liste n'est plus celle de `If-Match` : elle a été modifiée depuis sa lecture */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };

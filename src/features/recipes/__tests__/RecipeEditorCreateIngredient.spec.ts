@@ -128,6 +128,18 @@ const openCreate = async (wrapper: Opened['wrapper']) => {
   await button.trigger('click')
   await flushPromises()
 }
+// La ligne « Créer » au bas de la liste (des ingrédients ressemblent au texte, aucun ne s'appelle ainsi)
+const createRow = () =>
+  document.body.querySelector<HTMLElement>('[data-testid="create-ingredient-option"]')
+const options = () =>
+  [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].filter(
+    (option) => option.dataset.testid !== 'create-ingredient-option',
+  )
+const optionNames = () => options().map((option) => option.textContent.trim())
+const openCreateRow = async () => {
+  createRow()?.click()
+  await flushPromises()
+}
 const sheet = () => document.body.querySelector<HTMLElement>('[role="dialog"]')
 const sheetField = (label: string) => {
   const target = [...(sheet()?.querySelectorAll('label') ?? [])].find(
@@ -205,6 +217,96 @@ describe('RecipeEditorView : créer un ingrédient dans la recette', () => {
     expect(offer(wrapper).exists()).toBe(false)
     await search(wrapper, '   ')
     expect(offer(wrapper).exists()).toBe(false)
+  })
+
+  describe('recherche souple', () => {
+    const withBeef = (extra: unknown[] = []) => ({
+      'GET /api/v1/ingredients': () =>
+        json(
+          listOf([
+            ...existing,
+            {
+              slug: 'boeuf',
+              name: 'Bœuf',
+              departmentSlug: 'conserve',
+              departmentName: 'Conserves',
+            },
+            {
+              slug: 'boeuf-hache',
+              name: 'Bœuf haché',
+              departmentSlug: 'surgele',
+              departmentName: 'Surgelés',
+            },
+            ...extra,
+          ]),
+        ),
+    })
+
+    it('« Boeuf » trouve « Bœuf » (la ligature s’écrit « oe »), sans rien proposer de créer', async () => {
+      const { wrapper } = await open(withBeef())
+
+      await search(wrapper, 'Boeuf')
+
+      expect(optionNames()).toEqual(['Bœuf', 'Bœuf haché'])
+      // Un ingrédient porte exactement ce nom : rien à créer, ni panneau ni ligne
+      expect(offer(wrapper).exists()).toBe(false)
+      expect(createRow()).toBeNull()
+    })
+
+    it('rattrape une faute de frappe et offre aussi de créer, sans l’imposer', async () => {
+      const { wrapper, fetchMock } = await open(withBeef())
+
+      await search(wrapper, 'boeff')
+
+      expect(optionNames()[0]).toBe('Bœuf')
+      expect(createRow()?.textContent.trim()).toBe('Créer « boeff »')
+      // Le panneau « Aucun ingrédient… » n'est que pour ce qui ne ressemble à rien
+      expect(offer(wrapper).exists()).toBe(false)
+      // Choisir une proposition range « Bœuf » dans la ligne, rien n'est créé
+      options()[0]?.click()
+      await flushPromises()
+      expect((wrapper.find('input[role="combobox"]').element as HTMLInputElement).value).toBe(
+        'Bœuf',
+      )
+      expect(posts(fetchMock)).toHaveLength(0)
+      expect(sheet()).toBeNull()
+    })
+
+    it('la ligne « Créer » ouvre la feuille avec le texte tapé, sans changer l’ingrédient de la ligne', async () => {
+      const { wrapper } = await open(withBeef())
+
+      await search(wrapper, 'boeuf bourguignon')
+      expect(optionNames()).toEqual(['Bœuf'])
+      await openCreateRow()
+
+      expect(sheet()?.querySelector('h2')?.textContent).toBe('Nouvel ingrédient')
+      expect(sheetField('Nom')?.value).toBe('Boeuf bourguignon')
+      expect(document.body.querySelector('[role="listbox"]')).toBeNull()
+    })
+
+    it('un texte qui ne ressemble à rien garde le panneau « Créer », sans liste', async () => {
+      const { wrapper } = await open(withBeef())
+
+      await search(wrapper, 'cardamome')
+
+      expect(offer(wrapper).exists()).toBe(true)
+      expect(createRow()).toBeNull()
+    })
+
+    it('une fois un ingrédient choisi, la liste entière reste à portée', async () => {
+      const { wrapper } = await open(withBeef())
+      await search(wrapper, 'Boeuf')
+      options()[0]?.click()
+      await flushPromises()
+
+      const input = wrapper.find('input[role="combobox"]')
+      ;(input.element as HTMLInputElement).focus()
+      await wrapper.find('button[aria-label="Ingrédient 1"]').trigger('click')
+      await flushPromises()
+
+      expect(optionNames()).toHaveLength(4)
+      expect(createRow()).toBeNull()
+    })
   })
 
   it('ne propose rien quand les ingrédients ne sont pas encore chargés ou ne se chargent pas', async () => {
@@ -360,11 +462,9 @@ describe('RecipeEditorView : créer un ingrédient dans la recette', () => {
 
   it('dit « Tu as déjà … » et n’envoie rien quand le rayon choisi a déjà ce nom', async () => {
     const { wrapper, fetchMock } = await open()
+    // « petits poi » ressemble à « Petits pois » sans être son nom : la liste s'ouvre et « Créer » en est la dernière ligne
     await search(wrapper, 'petits poi')
-    await offer(wrapper).exists() // aucun nom ne contient « petits poi » ? si : l'offre n'existe pas
-    await search(wrapper, 'petits pois!')
-    await openCreate(wrapper)
-    await flushPromises()
+    await openCreateRow()
     await type(sheetField('Nom'), 'petits pois')
 
     radio('Surgelés')?.click()
@@ -381,9 +481,8 @@ describe('RecipeEditorView : créer un ingrédient dans la recette', () => {
 
   it('informe, sans bloquer, quand le nom existe dans un autre rayon', async () => {
     const { wrapper, fetchMock } = await open()
-    await search(wrapper, 'petits pois!')
-    await openCreate(wrapper)
-    await flushPromises()
+    await search(wrapper, 'petits poi')
+    await openCreateRow()
     await type(sheetField('Nom'), 'petits pois')
 
     radio('Fruits et légumes')?.click()

@@ -145,6 +145,29 @@ export function useToggleRow(listId: () => string | null) {
   })
 }
 
+/**
+ * « + » et « − » sur une ligne de la liste : un de plus ou un de moins, dans l'unité d'achat. La ligne est désignée par son identifiant, donc
+ * c'est la liste qui la porte qui change, quelle que soit la destination du produit. Le back lit la quantité arrondie à l'entier supérieur :
+ * on la relit après chaque geste plutôt que de la calculer ici. À zéro, la ligne disparaît.
+ */
+export function useChangeRowQuantity() {
+  const { api } = useSessionStore()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ rowId, delta }: { rowId: string; delta: 1 | -1 }) => {
+      const params = { params: { path: { id: rowId } } }
+
+      return unwrap(
+        delta === 1
+          ? api.POST('/api/v1/shopping-list-rows/{id}/increase', params)
+          : api.POST('/api/v1/shopping-list-rows/{id}/decrease', params),
+      )
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: shoppingListKeys.all }),
+  })
+}
+
 /** Change le nombre de personnes d'un repas : le back recalcule les quantités de la liste. */
 export function useChangeServing() {
   const { api } = useSessionStore()

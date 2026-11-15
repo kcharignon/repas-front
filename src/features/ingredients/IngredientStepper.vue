@@ -38,9 +38,12 @@ const stepClass =
     >
       <Minus class="size-5" aria-hidden="true" />
     </button>
-    <span v-if="!plusOnly" class="min-w-14 text-center text-base font-bold" aria-live="polite">{{
-      formatQuantity(quantity, unitSymbol)
-    }}</span>
+    <span
+      v-if="!plusOnly"
+      class="min-w-14 px-1 text-center text-base font-bold"
+      aria-live="polite"
+      >{{ formatQuantity(quantity, unitSymbol) }}</span
+    >
     <button
       type="button"
       :aria-label="t('ingredients.more', { name })"
