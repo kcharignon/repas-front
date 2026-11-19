@@ -4252,7 +4252,7 @@
                 "tags": [
                     "Drive"
                 ],
-                "summary": "Coche, dans la liste envoy\u00e9e au drive, les lignes dont l'agent a mis l'article au panier de l'enseigne (DRV-745). C'est la seule \u00e9criture qui coche une ligne d'une liste envoy\u00e9e : r\u00e9serv\u00e9e au propri\u00e9taire, jamais un d\u00e9cochage, idempotente (une ligne d\u00e9j\u00e0 coch\u00e9e le reste, un slug absent de la liste est ignor\u00e9). La version de la liste ne change pas et la derni\u00e8re ligne coch\u00e9e ne termine pas la liste : \u00ab Terminer la liste \u00bb reste un geste explicite",
+                "summary": "Coche, dans la liste envoy\u00e9e au drive, les lignes dont l'agent a mis l'article au panier de l'enseigne (DRV-745). C'est la seule \u00e9criture qui coche une ligne d'une liste envoy\u00e9e : r\u00e9serv\u00e9e au propri\u00e9taire, jamais un d\u00e9cochage, idempotente (une ligne d\u00e9j\u00e0 coch\u00e9e le reste, un slug absent de la liste est ignor\u00e9). La version de la liste ne change pas et la derni\u00e8re ligne coch\u00e9e ne termine pas la liste : \u00ab Terminer la liste \u00bb reste un geste explicite. Le corps peut aussi dire, dans `notAdded`, ce qui est arriv\u00e9 aux lignes que le passage n'a pas mises au panier (refus\u00e9es par le drive, indisponibles, pass\u00e9es, d\u00e9j\u00e0 \u00e0 la maison, en erreur) : leur issue est gard\u00e9e sur la ligne pour comprendre la liste apr\u00e8s coup (ADR 0041), elles restent d\u00e9coch\u00e9es",
                 "operationId": "post_api_mark_lines_in_basket",
                 "parameters": [
                     {
@@ -4290,7 +4290,7 @@
                         "description": "La liste n'est pas envoy\u00e9e au drive : rouverte ou termin\u00e9e entre-temps (message `SHOPPING_LIST_NOT_SENT`)"
                     },
                     "422": {
-                        "description": "Corps invalide : `ingredientSlugs` absent, vide, de plus de 1 000 \u00e9l\u00e9ments, avec un doublon ou un slug mal form\u00e9"
+                        "description": "Corps invalide : aucune ligne (ni `ingredientSlugs` ni `notAdded`), plus de 1 000 \u00e9l\u00e9ments dans l'un des deux, un doublon, un slug mal form\u00e9, une issue inconnue ou une raison qui n'est pas un code"
                     },
                     "429": {
                         "$ref": "#/components/responses/DriveWriteRateLimited"
@@ -5604,22 +5604,64 @@
                 },
                 "type": "object"
             },
-            "MarkLinesInBasketPayload": {
+            "NotAddedOutcome": {
+                "type": "string",
+                "enum": [
+                    "NOT_IN_CART",
+                    "UNAVAILABLE",
+                    "SKIPPED",
+                    "HAVE_AT_HOME",
+                    "FAILED"
+                ]
+            },
+            "NotAddedLinePayload": {
                 "required": [
-                    "ingredientSlugs"
+                    "ingredientSlug",
+                    "outcome"
                 ],
                 "properties": {
+                    "ingredientSlug": {
+                        "description": "Slug de l'ingr\u00e9dient de la ligne ; un slug qui n'est pas dans la liste est ignor\u00e9, un ancien slug d\u00e9signe l'ingr\u00e9dient actuel",
+                        "type": "string",
+                        "pattern": "^[a-z0-9-]{1,255}$",
+                        "example": "farine"
+                    },
+                    "outcome": {
+                        "$ref": "#/components/schemas/NotAddedOutcome"
+                    },
+                    "reason": {
+                        "description": "La raison quand l'agent la conna\u00eet : un code en majuscules de 40 caract\u00e8res au plus (le code de l'erreur de l'agent), jamais un texte libre",
+                        "type": "string",
+                        "default": null,
+                        "pattern": "^[A-Z][A-Z0-9_]{0,39}$",
+                        "example": "BLOCKED",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "MarkLinesInBasketPayload": {
+                "properties": {
                     "ingredientSlugs": {
-                        "description": "Slugs des ingr\u00e9dients dont l'article est au panier : 1 \u00e0 1 000, distincts. Un slug qui n'est pas dans la liste est ignor\u00e9 ; un ancien slug (ancien commun, ingr\u00e9dient fusionn\u00e9) d\u00e9signe l'ingr\u00e9dient actuel",
+                        "description": "Slugs des ingr\u00e9dients dont l'article est au panier : 0 \u00e0 1 000, distincts, au moins une ligne ici ou dans `notAdded`. Un slug qui n'est pas dans la liste est ignor\u00e9 ; un ancien slug (ancien commun, ingr\u00e9dient fusionn\u00e9) d\u00e9signe l'ingr\u00e9dient actuel",
                         "type": "array",
                         "items": {
                             "type": "string",
                             "pattern": "^[a-z0-9-]{1,255}$",
                             "example": "farine"
                         },
+                        "default": [],
                         "maxItems": 1000,
-                        "minItems": 1,
                         "uniqueItems": true
+                    },
+                    "notAdded": {
+                        "description": "Les lignes que le passage n'a PAS mises au panier, avec leur issue (ADR 0041) : 0 \u00e0 1 000, facultatif (un site plus ancien ne l'envoie pas). Elles restent d\u00e9coch\u00e9es ; l'issue est gard\u00e9e sur la ligne pour comprendre la liste, rien ne s'appuie dessus",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/NotAddedLinePayload"
+                        },
+                        "default": [],
+                        "maxItems": 1000
                     }
                 },
                 "type": "object"

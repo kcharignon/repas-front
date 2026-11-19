@@ -273,7 +273,16 @@ test.describe('parcours complet, pont et API simulés', () => {
     await expect(
       page.getByText('Les articles ajoutés au panier sont cochés dans ta liste.'),
     ).toBeVisible()
-    expect(back.baskets).toEqual([{ ingredientSlugs: ['farine', 'oeuf', 'sel'] }])
+    expect(back.baskets).toEqual([
+      {
+        ingredientSlugs: ['farine', 'oeuf', 'sel'],
+        // Le même appel dit au back ce qui est arrivé aux deux autres lignes (journal du back, ADR 0041) : elles ne sont pas cochées
+        notAdded: [
+          { ingredientSlug: 'lait', outcome: 'UNAVAILABLE', reason: null },
+          { ingredientSlug: 'sucre', outcome: 'HAVE_AT_HOME', reason: null },
+        ],
+      },
+    ])
 
     // 7. Le récapitulatif : les compteurs, puis chaque ligne
     const counts = page.getByLabel('Récapitulatif de l’envoi')

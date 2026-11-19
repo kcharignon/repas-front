@@ -7,7 +7,8 @@ import type { ChoiceIntent, DriveSettings, DriveStorePayload } from '@/api'
 import { shoppingListKeys } from '@/features/shopping-lists/queries'
 import { useSessionStore } from '@/session/session'
 
-import { basketBatches } from './basket'
+import { basketBatches, MAX_BASKET_SLUGS } from './basket'
+import type { NotAddedLine } from './basket'
 import { retailerOf } from './retailers'
 import type { Retailer, RetailerId } from './retailers'
 
@@ -114,9 +115,17 @@ export function useSaveChoices() {
   })
 }
 
+/** Une issue de ligne telle que le contrat la veut : la raison est toujours écrite, `null` quand l'agent n'en donne pas. */
+const issuePayload = (line: NotAddedLine) => ({
+  ingredientSlug: line.ingredientSlug,
+  outcome: line.outcome,
+  reason: line.reason ?? null,
+})
+
 /**
  * Coche, dans la liste envoyée, les articles que le passage a mis au panier (`POST /drive/plans/{id}/basket-lines`, DRV-747), lot après lot (1 000 slugs
- * au plus par appel, un seul lot presque toujours). Jamais bloquant : l'appelant n'attend pas le résultat et avale l'échec (`silent`, aucune notification) ;
+ * au plus par appel, un seul lot presque toujours), et dit au back ce qui est arrivé aux autres lignes (`notAdded`, journal du back, ADR 0041 : refusée par le
+ * drive, introuvable, passée, déjà à la maison, en erreur). Les issues partent avec le premier lot, ou seules quand rien n'est au panier ; elles ne cochent rien. Jamais bloquant : l'appelant n'attend pas le résultat et avale l'échec (`silent`, aucune notification) ;
  * `404` (back plus ancien, drive coupé), `409` (liste rouverte entre-temps) et réseau ne coûtent que des coches. Une fois l'écriture finie, les listes sont
  * relues pour montrer les coches : surtout pas le plan du drive (`driveKeys.plan`, hors des clés des listes), qui ne contient plus les lignes cochées.
  */
@@ -125,12 +134,25 @@ export function useMarkBasketLines() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ listId, slugs }: { listId: string; slugs: readonly string[] }) => {
-      for (const ingredientSlugs of basketBatches(slugs))
+    mutationFn: async ({
+      listId,
+      slugs,
+      notAdded = [],
+    }: {
+      listId: string
+      slugs: readonly string[]
+      notAdded?: readonly NotAddedLine[]
+    }) => {
+      const issues = notAdded.slice(0, MAX_BASKET_SLUGS)
+      const batches = basketBatches(slugs)
+      // Rien au panier mais des issues à garder : un seul appel, sans article
+      if (batches.length === 0 && issues.length > 0) batches.push([])
+      for (const [index, ingredientSlugs] of batches.entries())
         await unwrap(
           api.POST('/api/v1/drive/plans/{shoppingListId}/basket-lines', {
             params: { path: { shoppingListId: listId } },
-            body: { ingredientSlugs },
+            // Les deux clés partent toujours (le contrat les donne avec une valeur par défaut) : les issues avec le premier lot seulement
+            body: { ingredientSlugs, notAdded: index === 0 ? issues.map(issuePayload) : [] },
           }),
         )
     },

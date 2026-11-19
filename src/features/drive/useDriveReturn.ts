@@ -2,7 +2,7 @@ import { onScopeDispose } from 'vue'
 import { useRouter } from 'vue-router'
 import type { ResultMessage } from '@drive-protocol'
 
-import { basketSlugsOf } from './basket'
+import { basketReportOf, isEmptyReport } from './basket'
 import { driveBridge } from './bridge'
 import type { RunDraft } from './bridge'
 import { buildChoiceBatches } from './choices'
@@ -30,9 +30,14 @@ export function useDriveReturn() {
     // Sans les lignes du plan envoyé, rien ne dit que le résultat est celui qu'on attend : rien n'est gardé
     if (draft.lines === undefined || storeId === undefined || result.lines.length === 0) return
     const kept = restrictToPlan(result, draft.lines).result
-    const slugs = basketSlugsOf(kept)
+    const report = basketReportOf(kept)
     try {
-      if (slugs.length > 0) await markBasket.mutateAsync({ listId: draft.listId, slugs })
+      if (!isEmptyReport(report))
+        await markBasket.mutateAsync({
+          listId: draft.listId,
+          slugs: report.slugs,
+          notAdded: report.notAdded,
+        })
     } catch {
       // Les articles restent non cochés
     }

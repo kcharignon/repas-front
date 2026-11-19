@@ -280,8 +280,15 @@ describe('retour du drive : un passage réussi', () => {
     await saved(wrapper)
 
     expect(calls(fetchMock)).not.toContain('PUT /api/v1/drive/choices')
-    // Rien n'est au panier : rien à cocher non plus (le back refuse un tableau vide)
-    expect(calls(fetchMock)).not.toContain('POST /api/v1/drive/plans/l1/basket-lines')
+    // Rien n'est au panier : rien à cocher, mais le back garde ce qui est arrivé à chaque ligne (journal, ADR 0041), sans article au panier
+    const basket = calls(fetchMock).indexOf('POST /api/v1/drive/plans/l1/basket-lines')
+    expect(await bodyOf(fetchMock, basket)).toEqual({
+      ingredientSlugs: [],
+      notAdded: [
+        { ingredientSlug: 'sel', outcome: 'SKIPPED', reason: null },
+        { ingredientSlug: 'riz', outcome: 'UNAVAILABLE', reason: null },
+      ],
+    })
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull()
     expect(wrapper.text()).toContain('Aucun produit disponible : rien n’a été mis au panier.')
     expect(wrapper.text()).toContain('Pas cette fois.')
@@ -1478,19 +1485,71 @@ describe('retour du drive : les articles mis au panier sont cochés dans la list
     })
   })
 
-  it.each<[string, ResultLine[]]>([
-    ['« J’en ai toujours »', [{ ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' }]],
-    ['« Pas cette fois »', [{ ingredientSlug: 'sel', outcome: 'SKIPPED' }]],
-    ['un produit introuvable', [{ ingredientSlug: 'riz', outcome: 'UNAVAILABLE' }]],
-    ['un échec', [{ ingredientSlug: 'beurre', outcome: 'FAILED', error: 'NETWORK' }]],
-    ['un produit choisi que le panier n’a pas pris', [notInCart('poivre')]],
-  ])('%s : aucun article n’est coché, donc aucun appel', async (_label, lines) => {
-    const { wrapper, fetchMock } = await open(sentOf(lines, 'partial'))
-    await saved(wrapper)
-    await flushPromises()
+  // Journal du back (ADR 0041) : sans article au panier, rien n'est coché, mais ce qui est arrivé à la ligne part au back (une seule fois, sans article)
+  it.each<
+    [string, ResultLine[], { ingredientSlug: string; outcome: string; reason: string | null }]
+  >([
+    [
+      '« J’en ai toujours »',
+      [{ ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' }],
+      { ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME', reason: null },
+    ],
+    [
+      '« Pas cette fois »',
+      [{ ingredientSlug: 'sel', outcome: 'SKIPPED' }],
+      { ingredientSlug: 'sel', outcome: 'SKIPPED', reason: null },
+    ],
+    [
+      'un produit introuvable',
+      [{ ingredientSlug: 'riz', outcome: 'UNAVAILABLE' }],
+      { ingredientSlug: 'riz', outcome: 'UNAVAILABLE', reason: null },
+    ],
+    [
+      'un échec',
+      [{ ingredientSlug: 'beurre', outcome: 'FAILED', error: 'NETWORK' }],
+      { ingredientSlug: 'beurre', outcome: 'FAILED', reason: 'NETWORK' },
+    ],
+    [
+      'un produit choisi que le panier n’a pas pris',
+      [notInCart('poivre')],
+      { ingredientSlug: 'poivre', outcome: 'NOT_IN_CART', reason: null },
+    ],
+  ])(
+    '%s : aucun article n’est coché, l’issue de la ligne part au back',
+    async (_label, lines, issue) => {
+      const { wrapper, fetchMock } = await open(sentOf(lines, 'partial'))
+      await saved(wrapper)
+      await ticked(fetchMock)
 
-    expect(calls(fetchMock)).not.toContain(BASKET)
-    expect(wrapper.text()).not.toContain(saidTicked)
+      expect(calls(fetchMock).filter((call) => call === BASKET)).toHaveLength(1)
+      expect(await bodyOf(fetchMock, calls(fetchMock).indexOf(BASKET))).toEqual({
+        ingredientSlugs: [],
+        notAdded: [issue],
+      })
+      expect(wrapper.text()).not.toContain(saidTicked)
+    },
+  )
+
+  it('un article au panier ET des issues : un seul appel, les deux moitiés du rapport', async () => {
+    const { wrapper, fetchMock } = await open(
+      sentOf([
+        added('farine', '123456'),
+        notInCart('poivre'),
+        { ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME' },
+      ]),
+    )
+    await saved(wrapper)
+    await ticked(fetchMock)
+
+    expect(calls(fetchMock).filter((call) => call === BASKET)).toHaveLength(1)
+    expect(await bodyOf(fetchMock, calls(fetchMock).indexOf(BASKET))).toEqual({
+      ingredientSlugs: ['farine'],
+      notAdded: [
+        { ingredientSlug: 'poivre', outcome: 'NOT_IN_CART', reason: null },
+        { ingredientSlug: 'sel', outcome: 'HAVE_AT_HOME', reason: null },
+      ],
+    })
+    await vi.waitFor(() => expect(wrapper.text()).toContain(saidTicked))
   })
 
   it('un arrêt voulu sans aucune ligne n’appelle rien : le back refuse un tableau vide', async () => {

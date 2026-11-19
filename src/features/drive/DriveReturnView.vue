@@ -15,7 +15,7 @@ import {
 } from '@/features/shopping-lists/queries'
 import { isRateLimited, messageForFailure } from '@/notifications/failures'
 import { useOnline } from '@/offline/useOnline'
-import { basketSlugsOf, notInCartCount } from './basket'
+import { basketReportOf, isEmptyReport, notInCartCount } from './basket'
 import { driveBridge } from './bridge'
 import { buildChoiceBatches, countChoices, knownProductsOf } from './choices'
 import { chosenStoreOf } from './chosenStore'
@@ -254,16 +254,18 @@ const basketTicked = ref<string | null>(null)
 /**
  * Une fois, jamais bloquant : sans lui l'enregistrement des choix n'est pas gêné (un `404`, un `409` ou le réseau coûtent seulement des coches), et
  * rien n'est dit s'il échoue. Le résultat est déjà recoupé avec le plan : un faux résultat ne coche que des lignes que le plan explique. Aucun appel
- * sans article au panier (un arrêt avant le moindre ajout) : le back refuse une liste vide.
+ * sans rien à rapporter (un arrêt avant la moindre ligne) : le back refuse un rapport vide. Les lignes que le passage n'a pas mises au panier partent aussi
+ * (`notAdded`, journal du back, ADR 0041) : elles restent décochées, le back garde ce qui leur est arrivé.
  */
 async function tickBasket(result: ResultMessage, id: string) {
   if (basketSent.value === result.runId) return
   basketSent.value = result.runId
-  const slugs = basketSlugsOf(result)
-  if (slugs.length === 0) return
+  const report = basketReportOf(result)
+  if (isEmptyReport(report)) return
   try {
-    await markBasket.mutateAsync({ listId: id, slugs })
-    basketTicked.value = result.runId
+    await markBasket.mutateAsync({ listId: id, slugs: report.slugs, notAdded: report.notAdded })
+    // « Les articles ajoutés au panier sont cochés » ne se dit que s'il y en a : un rapport qui ne garde que des issues ne coche rien
+    if (report.slugs.length > 0) basketTicked.value = result.runId
   } catch {
     // Les articles restent non cochés : la liste dit toujours ce qu'il reste à voir
   }

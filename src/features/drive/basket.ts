@@ -30,6 +30,66 @@ export function basketSlugsOf(result: ResultMessage): string[] {
   return [...new Set(slugs)]
 }
 
+/** Ce qui est arrivé à une ligne que le passage n'a PAS mise au panier (le `notAdded` de `POST /drive/plans/{id}/basket-lines`, journal du back, ADR 0041). */
+export type NotAddedOutcome = 'NOT_IN_CART' | 'UNAVAILABLE' | 'SKIPPED' | 'HAVE_AT_HOME' | 'FAILED'
+
+export interface NotAddedLine {
+  ingredientSlug: string
+  outcome: NotAddedOutcome
+  /** Le code de l'erreur de l'agent (`BLOCKED`, `NETWORK`…), seulement avec `FAILED` : jamais un libellé ni un morceau de page. */
+  reason?: string
+}
+
+/**
+ * Ce que le passage n'a PAS mis au panier, avec ce qui est arrivé à chaque ligne : un produit choisi que le panier n'a pas pris (`NOT_IN_CART`, le drive l'a
+ * refusé), un produit introuvable, « Pas cette fois », « J'en ai toujours », un échec (avec le code de l'erreur). Le back le garde sur la ligne pour comprendre
+ * la liste après coup ; rien ne s'appuie dessus et la ligne reste décochée. Même règle que `basketSlugsOf` : un ingrédient au panier n'est jamais dedans, une seule
+ * entrée par ingrédient (la première), dans l'ordre du résultat. Le résultat doit déjà avoir été recoupé avec le plan envoyé (`restrictToPlan`).
+ */
+export function notAddedOf(result: ResultMessage): NotAddedLine[] {
+  const inCart = new Set(basketSlugsOf(result))
+  const lines = new Map<string, NotAddedLine>()
+  for (const line of result.lines) {
+    if (inCart.has(line.ingredientSlug) || lines.has(line.ingredientSlug)) continue
+    const entry = notAddedLineOf(line)
+    if (entry !== null) lines.set(line.ingredientSlug, entry)
+  }
+
+  return [...lines.values()]
+}
+
+function notAddedLineOf(line: ResultLine): NotAddedLine | null {
+  switch (line.outcome) {
+    case 'ADDED':
+      return null
+    case 'CHOSEN':
+      return line.notInCart === true
+        ? { ingredientSlug: line.ingredientSlug, outcome: 'NOT_IN_CART' }
+        : null
+    case 'FAILED':
+      return { ingredientSlug: line.ingredientSlug, outcome: 'FAILED', reason: line.error }
+    case 'UNAVAILABLE':
+    case 'SKIPPED':
+    case 'HAVE_AT_HOME':
+      return { ingredientSlug: line.ingredientSlug, outcome: line.outcome }
+  }
+}
+
+/** Ce que le passage a fait des lignes, tel que le back le reçoit : les articles au panier (leurs lignes sont cochées) et les autres, avec leur issue. */
+export interface BasketReport {
+  slugs: string[]
+  notAdded: NotAddedLine[]
+}
+
+export const basketReportOf = (result: ResultMessage): BasketReport => ({
+  slugs: basketSlugsOf(result),
+  notAdded: notAddedOf(result),
+})
+
+/** Vrai quand il n'y a rien à rapporter : un arrêt avant la moindre ligne. Le back refuse un rapport sans aucune ligne. */
+export const isEmptyReport = (report: BasketReport): boolean =>
+  report.slugs.length === 0 && report.notAdded.length === 0
+
 /** Découpe en appels d'au plus `MAX_BASKET_SLUGS` slugs (improbable : une liste a rarement mille articles). */
 export function basketBatches(slugs: readonly string[]): string[][] {
   const batches: string[][] = []
