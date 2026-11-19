@@ -1456,7 +1456,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Coche, dans la liste envoyée au drive, les lignes dont l'agent a mis l'article au panier de l'enseigne (DRV-745). C'est la seule écriture qui coche une ligne d'une liste envoyée : réservée au propriétaire, jamais un décochage, idempotente (une ligne déjà cochée le reste, un slug absent de la liste est ignoré). La version de la liste ne change pas et la dernière ligne cochée ne termine pas la liste : « Terminer la liste » reste un geste explicite */
+        /** Coche, dans la liste envoyée au drive, les lignes dont l'agent a mis l'article au panier de l'enseigne (DRV-745). C'est la seule écriture qui coche une ligne d'une liste envoyée : réservée au propriétaire, jamais un décochage, idempotente (une ligne déjà cochée le reste, un slug absent de la liste est ignoré). La version de la liste ne change pas et la dernière ligne cochée ne termine pas la liste : « Terminer la liste » reste un geste explicite. Le corps peut aussi dire, dans `notAdded`, ce qui est arrivé aux lignes que le passage n'a pas mises au panier (refusées par le drive, indisponibles, passées, déjà à la maison, en erreur) : leur issue est gardée sur la ligne pour comprendre la liste après coup (ADR 0041), elles restent décochées */
         post: operations["post_api_mark_lines_in_basket"];
         delete?: never;
         options?: never;
@@ -2040,9 +2040,33 @@ export interface components {
         ListChoicesRequestQuery: {
             retailer: components["schemas"]["Retailer"];
         };
+        /** @enum {string} */
+        NotAddedOutcome: "NOT_IN_CART" | "UNAVAILABLE" | "SKIPPED" | "HAVE_AT_HOME" | "FAILED";
+        NotAddedLinePayload: {
+            /**
+             * @description Slug de l'ingrédient de la ligne ; un slug qui n'est pas dans la liste est ignoré, un ancien slug désigne l'ingrédient actuel
+             * @example farine
+             */
+            ingredientSlug: string;
+            outcome: components["schemas"]["NotAddedOutcome"];
+            /**
+             * @description La raison quand l'agent la connaît : un code en majuscules de 40 caractères au plus (le code de l'erreur de l'agent), jamais un texte libre
+             * @default null
+             * @example BLOCKED
+             */
+            reason: string | null;
+        };
         MarkLinesInBasketPayload: {
-            /** @description Slugs des ingrédients dont l'article est au panier : 1 à 1 000, distincts. Un slug qui n'est pas dans la liste est ignoré ; un ancien slug (ancien commun, ingrédient fusionné) désigne l'ingrédient actuel */
+            /**
+             * @description Slugs des ingrédients dont l'article est au panier : 0 à 1 000, distincts, au moins une ligne ici ou dans `notAdded`. Un slug qui n'est pas dans la liste est ignoré ; un ancien slug (ancien commun, ingrédient fusionné) désigne l'ingrédient actuel
+             * @default []
+             */
             ingredientSlugs: string[];
+            /**
+             * @description Les lignes que le passage n'a PAS mises au panier, avec leur issue (ADR 0041) : 0 à 1 000, facultatif (un site plus ancien ne l'envoie pas). Elles restent décochées ; l'issue est gardée sur la ligne pour comprendre la liste, rien ne s'appuie dessus
+             * @default []
+             */
+            notAdded: components["schemas"]["NotAddedLinePayload"][];
         };
         RememberLastRetailerPayload: {
             retailer: components["schemas"]["Retailer"];
@@ -8447,7 +8471,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Corps invalide : `ingredientSlugs` absent, vide, de plus de 1 000 éléments, avec un doublon ou un slug mal formé */
+            /** @description Corps invalide : aucune ligne (ni `ingredientSlugs` ni `notAdded`), plus de 1 000 éléments dans l'un des deux, un doublon, un slug mal formé, une issue inconnue ou une raison qui n'est pas un code */
             422: {
                 headers: {
                     [name: string]: unknown;

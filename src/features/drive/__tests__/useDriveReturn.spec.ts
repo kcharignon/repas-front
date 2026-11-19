@@ -180,6 +180,7 @@ describe('écoute du drive au démarrage de l’application', () => {
       await body(calls(fetchMock).indexOf('POST /api/v1/drive/plans/l2/basket-lines')),
     ).toEqual({
       ingredientSlugs: ['farine', 'poivre'],
+      notAdded: [],
     })
     expect(
       JSON.stringify(await body(calls(fetchMock).indexOf('PUT /api/v1/drive/choices'))),
