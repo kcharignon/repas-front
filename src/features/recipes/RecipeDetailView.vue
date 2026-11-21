@@ -294,7 +294,7 @@ function confirmDelete() {
           <UiButton
             v-else-if="copying.isCopied(recipe.data.value.id)"
             variant="ghost"
-            class="bg-soft text-primary disabled:opacity-100"
+            class="bg-soft text-done disabled:opacity-100"
             :aria-label="t('recipes.copiedNamed', { name: recipe.data.value.name })"
             disabled
           >
@@ -321,7 +321,7 @@ function confirmDelete() {
           <UiButton
             v-else-if="copying.isCopied(recipe.data.value.id)"
             variant="ghost"
-            class="bg-soft text-primary disabled:opacity-100"
+            class="bg-soft text-done disabled:opacity-100"
             :aria-label="t('recipes.copiedNamed', { name: recipe.data.value.name })"
             disabled
           >

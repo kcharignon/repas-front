@@ -17,7 +17,7 @@ defineProps<{
     class="h-2 overflow-hidden rounded-full bg-line"
   >
     <ProgressIndicator
-      class="h-full rounded-full bg-primary transition-[width] duration-300"
+      class="h-full rounded-full bg-done transition-[width] duration-300"
       :style="{ width: `${max === 0 ? 0 : (value / max) * 100}%` }"
     />
   </ProgressRoot>

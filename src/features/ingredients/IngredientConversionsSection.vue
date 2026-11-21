@@ -251,10 +251,7 @@ const cookingName = computed(() => unitName(conversions.data.value?.cookingUnitS
       </UiButton>
 
       <div aria-live="polite">
-        <p
-          v-if="convertible"
-          class="flex items-center gap-2 text-[15px] font-semibold text-primary"
-        >
+        <p v-if="convertible" class="flex items-center gap-2 text-[15px] font-semibold text-done">
           <Check class="size-5 shrink-0" aria-hidden="true" />
           {{ t('ingredients.conversions.canConvert', { unit: purchaseName }) }}
         </p>

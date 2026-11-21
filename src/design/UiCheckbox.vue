@@ -27,7 +27,7 @@ defineProps<{ disabled?: boolean }>()
         cn(
           'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[9px] border-2 border-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
           'data-[disabled]:cursor-default data-[disabled]:opacity-60',
-          'data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-on-primary',
+          'data-[state=checked]:border-done data-[state=checked]:bg-done data-[state=checked]:text-on-done',
         )
       "
     >
