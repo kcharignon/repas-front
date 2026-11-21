@@ -134,6 +134,19 @@ describe('thème de Noël : les choix de la maquette', () => {
     }
   })
 
+  it('les boutons et les liens sont rouges, et se distinguent du danger par la teinte', () => {
+    for (const palette of [light, darkForced]) {
+      const primary = hue(palette.primary!)
+      const gap = Math.abs(primary - hue(palette.danger!))
+
+      // Le rouge de fête est un rouge-rose (baie, houx), le danger un rouge-orangé : au moins 20° d'écart (cadran de 360°).
+      expect(primary).toBeGreaterThan(335)
+      expect(primary).toBeLessThan(360)
+      expect(Math.min(gap, 360 - gap)).toBeGreaterThanOrEqual(20)
+      expect(palette.primary).not.toBe(palette.brand)
+    }
+  })
+
   it('ne définit pas l’avertissement : il reste celui du thème de base', () => {
     for (const palette of [light, darkForced]) {
       expect(palette['warning-soft']).toBeUndefined()

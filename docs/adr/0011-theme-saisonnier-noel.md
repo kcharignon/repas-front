@@ -41,6 +41,8 @@ mécanisme, sans rien changer aux gestes ni à la mise en page.
 9. **Tests** : mêmes règles que l'ADR 0010 (horloge hors saison par défaut, chaque test de saison pose sa date). Un test compare le
    script d'amorçage et `applySeason()` pour chaque jour de 2028 (bissextile) et de 2029, avec chaque forme de la préférence.
 
+10. **Amendement du 2026-11-21 (demande du propriétaire : voir plus de rouge)** : en Noël, `--primary` (boutons, liens, bordures actives, cases cochées, barre d'avancement, interrupteurs) passe du vert au **rouge de fête** : `#a3123f` (houx) en clair, `#ff6f8e` (rose de fête) en sombre, avec `--on-primary` `#3a0618` en sombre. Le bandeau reste bordeaux (`--brand`). Le danger reste un rouge-orangé (`#b3261e` / `#f0705a`) : un test impose au moins 20° de teinte d'écart entre `--primary` et `--danger`, et les actions dangereuses se distinguent aussi par leur texte et leur fenêtre de confirmation. Les contrastes AA des trois blocs sont inchangés (`seasonContrast.spec.ts`). Le logo et la coche de l'icône ne bougent pas (ADR 0020).
+
 ## Conséquences
 
 - Positives : aucune action de l'utilisateur, rien ne change hors saison, une troisième saison n'ajoutera qu'une règle de dates, un
