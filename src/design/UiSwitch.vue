@@ -30,7 +30,7 @@ const hintId = `${id}-hint`
         :class="
           cn(
             'flex h-8 w-14 items-center rounded-full border-2 px-0.5 group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-primary',
-            model ? 'border-primary bg-primary' : 'border-muted bg-surface',
+            model ? 'border-done bg-done' : 'border-muted bg-surface',
           )
         "
       >
@@ -38,7 +38,7 @@ const hintId = `${id}-hint`
           :class="
             cn(
               'block size-5 rounded-full transition-transform motion-reduce:transition-none',
-              model ? 'translate-x-6 bg-on-primary' : 'translate-x-0 bg-muted',
+              model ? 'translate-x-6 bg-on-done' : 'translate-x-0 bg-muted',
             )
           "
         />

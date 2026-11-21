@@ -68,7 +68,7 @@ function openCopy() {
     <UiButton
       v-else-if="copied"
       variant="ghost"
-      class="bg-soft text-primary disabled:opacity-100"
+      class="bg-soft text-done disabled:opacity-100"
       :aria-label="t('recipes.copiedNamed', { name: recipe.name })"
       disabled
     >

@@ -147,6 +147,27 @@ describe('thème de Noël : les choix de la maquette', () => {
     }
   })
 
+  it('ce qui est fait (coché, avancement, validé) reste vert, lisible, et jamais rouge', () => {
+    for (const palette of [light, darkForced]) {
+      const done = palette.done!
+
+      expect(hue(done)).toBeGreaterThan(110)
+      expect(hue(done)).toBeLessThan(170)
+      for (const back of ['bg', 'surface', 'soft'] as const)
+        expect(contrast(done, palette[back]!), `done sur ${back}`).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(palette['on-done']!, done)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('les autres saisons ne redéfinissent pas « fait » : il suit leur couleur principale', () => {
+    for (const season of SEASONS.filter((name) => name !== 'noel')) {
+      for (const palette of Object.values(palettes[season])) {
+        expect(palette.done).toBeUndefined()
+        expect(palette['on-done']).toBeUndefined()
+      }
+    }
+  })
+
   it('ne définit pas l’avertissement : il reste celui du thème de base', () => {
     for (const palette of [light, darkForced]) {
       expect(palette['warning-soft']).toBeUndefined()

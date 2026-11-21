@@ -166,7 +166,8 @@
  * Thème saisonnier « Houx & neige » (ADR 0011) : `data-season="noel"` sur <html>, posé du 15 novembre au 5 janvier
  * (src/design/season.ts, public/theme-init.js). Même ordre que pour Halloween : clair, sombre selon le système, sombre forcé. Il ne
  * chevauche jamais Halloween (un seul `data-season` à la fois). Boutons, liens et états actifs (--primary) sont rouges (houx en clair,
- * rose de fête en sombre) : le bandeau bordeaux (--brand) n'est plus seul à porter la fête. L'or (--accent) ne porte jamais de texte : il ne sert que de fond,
+ * rose de fête en sombre) : le bandeau bordeaux (--brand) n'est plus seul à porter la fête. Ce qui est fait (case cochée, avancement,
+ * interrupteur allumé, coche de validation) reste vert (--done) : un rouge se lirait comme une erreur. L'or (--accent) ne porte jamais de texte : il ne sert que de fond,
  * avec --on-accent. Le danger reste un rouge distinct du bordeaux du bandeau (--brand). --warning-soft et --on-warning-soft restent
  * ceux du thème de base. Contrastes gardés par src/design/__tests__/seasonContrast.spec.ts.
  */
@@ -179,6 +180,8 @@
   --soft: #e2ecee;
   --primary: #a3123f;
   --on-primary: #ffffff;
+  --done: #17573a;
+  --on-done: #ffffff;
   --accent: #e9a92a;
   --on-accent: #2b1d00;
   --danger: #b3261e;
@@ -199,6 +202,8 @@
     --soft: #183044;
     --primary: #ff6f8e;
     --on-primary: #3a0618;
+    --done: #6fd3a0;
+    --on-done: #06170e;
     --accent: #f2c14e;
     --on-accent: #2b1d00;
     --danger: #f0705a;
@@ -219,6 +224,8 @@
   --soft: #183044;
   --primary: #ff6f8e;
   --on-primary: #3a0618;
+  --done: #6fd3a0;
+  --on-done: #06170e;
   --accent: #f2c14e;
   --on-accent: #2b1d00;
   --danger: #f0705a;
@@ -435,6 +442,9 @@
   --color-soft: var(--soft);
   --color-primary: var(--primary);
   --color-on-primary: var(--on-primary);
+  /* « Fait » : case cochée, avancement, interrupteur allumé, coche de validation. Égal au primaire, sauf si la saison le redéfinit (Noël : vert). */
+  --color-done: var(--done, var(--primary));
+  --color-on-done: var(--on-done, var(--on-primary));
   --color-accent: var(--accent);
   --color-on-accent: var(--on-accent);
   --color-danger: var(--danger);

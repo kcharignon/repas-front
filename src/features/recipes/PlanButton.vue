@@ -63,7 +63,7 @@ function toggle() {
     :class="[
       'rounded-full',
       variant === 'icon' ? 'shrink-0' : 'px-4',
-      planned ? 'bg-soft text-primary' : '',
+      planned ? 'bg-soft text-done' : '',
     ]"
     @click="toggle"
   >
