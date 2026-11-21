@@ -165,7 +165,8 @@
 /*
  * Thème saisonnier « Houx & neige » (ADR 0011) : `data-season="noel"` sur <html>, posé du 15 novembre au 5 janvier
  * (src/design/season.ts, public/theme-init.js). Même ordre que pour Halloween : clair, sombre selon le système, sombre forcé. Il ne
- * chevauche jamais Halloween (un seul `data-season` à la fois). L'or (--accent) ne porte jamais de texte : il ne sert que de fond,
+ * chevauche jamais Halloween (un seul `data-season` à la fois). Boutons, liens et états actifs (--primary) sont rouges (houx en clair,
+ * rose de fête en sombre) : le bandeau bordeaux (--brand) n'est plus seul à porter la fête. L'or (--accent) ne porte jamais de texte : il ne sert que de fond,
  * avec --on-accent. Le danger reste un rouge distinct du bordeaux du bandeau (--brand). --warning-soft et --on-warning-soft restent
  * ceux du thème de base. Contrastes gardés par src/design/__tests__/seasonContrast.spec.ts.
  */
@@ -176,7 +177,7 @@
   --muted: #4f605a;
   --line: #cdd9dc;
   --soft: #e2ecee;
-  --primary: #17573a;
+  --primary: #a3123f;
   --on-primary: #ffffff;
   --accent: #e9a92a;
   --on-accent: #2b1d00;
@@ -196,8 +197,8 @@
     --muted: #a4b6bd;
     --line: #2b4152;
     --soft: #183044;
-    --primary: #6fd3a0;
-    --on-primary: #06170e;
+    --primary: #ff6f8e;
+    --on-primary: #3a0618;
     --accent: #f2c14e;
     --on-accent: #2b1d00;
     --danger: #f0705a;
@@ -216,8 +217,8 @@
   --muted: #a4b6bd;
   --line: #2b4152;
   --soft: #183044;
-  --primary: #6fd3a0;
-  --on-primary: #06170e;
+  --primary: #ff6f8e;
+  --on-primary: #3a0618;
   --accent: #f2c14e;
   --on-accent: #2b1d00;
   --danger: #f0705a;
