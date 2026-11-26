@@ -46,7 +46,7 @@
     "openapi-fetch": "^0.17.0",
     "pinia": "^4.0.3",
     "reka-ui": "^2.11.0",
-    "tailwind-merge": "^3.7.0",
+    "tailwind-merge": "^3.7.1",
     "tailwindcss": "^4.3.5",
     "vue": "^3.5.45",
     "vue-i18n": "^11.4.23",
